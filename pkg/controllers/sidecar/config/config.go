@@ -58,7 +58,7 @@ func (s *ScyllaConfig) Setup(ctx context.Context) (*exec.Cmd, error) {
 	var cmd *exec.Cmd
 
 	s.logger.Info(ctx, "Setting up scylla.yaml")
-	if err = s.setupScyllaYAML(); err != nil {
+	if err = s.setupScyllaYAML(scyllaYAMLPath, scyllaYAMLConfigMapPath); err != nil {
 		return nil, errors.Wrap(err, "failed to setup scylla.yaml")
 	}
 	s.logger.Info(ctx, "Setting up cassandra-rackdc.properties")
@@ -79,15 +79,15 @@ func (s *ScyllaConfig) Setup(ctx context.Context) (*exec.Cmd, error) {
 // - cluster_name
 // - rpc_address
 // - endpoint_snitch
-func (s *ScyllaConfig) setupScyllaYAML() error {
+func (s *ScyllaConfig) setupScyllaYAML(scyllaYamlPath, scyllaYamlConfigMapPath string) error {
 	// Read default scylla.yaml
-	scyllaYAMLBytes, err := ioutil.ReadFile(scyllaYAMLPath)
+	scyllaYAMLBytes, err := ioutil.ReadFile(scyllaYamlPath)
 	if err != nil {
 		return errors.Wrap(err, "failed to open scylla.yaml")
 	}
 
 	// Read config map scylla.yaml
-	scyllaYAMLConfigMapBytes, err := ioutil.ReadFile(scyllaYAMLConfigMapPath)
+	scyllaYAMLConfigMapBytes, err := ioutil.ReadFile(scyllaYamlConfigMapPath)
 	if err != nil {
 		s.logger.Info(context.Background(), "no scylla.yaml config map available")
 	}
@@ -102,18 +102,18 @@ func (s *ScyllaConfig) setupScyllaYAML() error {
 	if err != nil {
 		return errors.Wrap(err, "failed to parse override options for scylla.yaml")
 	}
-	scyllaYAMLConfigMapFilteredBytes, err := mergeYAMLs(scyllaYAMLConfigMapBytes, overrideYAMLBytes)
+	scyllaYAMLOverwrittenBytes, err := mergeYAMLs(scyllaYAMLBytes, overrideYAMLBytes)
 	if err != nil {
-		return errors.Wrap(err, "failed to merged config map YAML with default yaml values")
+		return errors.Wrap(err, "failed to merge scylla yaml with operator pre-sets")
 	}
 
-	customScyllaYAMLBytes, err := mergeYAMLs(scyllaYAMLBytes, scyllaYAMLConfigMapFilteredBytes)
+	customScyllaYAMLBytes, err := mergeYAMLs(scyllaYAMLOverwrittenBytes, scyllaYAMLConfigMapBytes)
 	if err != nil {
-		return errors.Wrap(err, "failed to merged YAMLs")
+		return errors.Wrap(err, "failed to merge overwritten scylla yaml with user config map")
 	}
 
 	// Write result to file
-	if err = ioutil.WriteFile(scyllaYAMLPath, customScyllaYAMLBytes, os.ModePerm); err != nil {
+	if err = ioutil.WriteFile(scyllaYamlPath, customScyllaYAMLBytes, os.ModePerm); err != nil {
 		return errors.Wrap(err, "error trying to write scylla.yaml")
 	}
 
